@@ -5,6 +5,8 @@ using System.Runtime.InteropServices;
 using System.Windows.Forms;
 using System.Drawing;
 using System.Drawing.Drawing2D;
+using System.Net.NetworkInformation;
+using Microsoft.Win32;
 
 namespace PCOptimizer
 {
@@ -13,19 +15,45 @@ namespace PCOptimizer
         [DllImport("psapi.dll")]
         static extern int EmptyWorkingSet(IntPtr hwndProc);
 
-        private Button btnOn;
-        private Button btnOff;
-        private Button btnPack;
+        private TableLayoutPanel layout;
+        private Label lblPing;
         private Label lblStatus;
-        private Label lblInfo;
-        private bool isOptimized = false;
-        
-        string statusPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "PCOptimizer_Status.txt");
+        private Timer pingTimer;
+        private int currentFontSize = 10;
 
         public MainForm()
         {
+            LoadSettings();
             InitializeComponent();
-            LoadStatus(); 
+            StartPingMonitor();
+        }
+
+        private void LoadSettings()
+        {
+            try
+            {
+                using (RegistryKey key = Registry.CurrentUser.OpenSubKey(@"Software\PCOptimizer"))
+                {
+                    if (key != null)
+                    {
+                        object val = key.GetValue("FontSize");
+                        if (val != null) currentFontSize = (int)val;
+                    }
+                }
+            }
+            catch { }
+        }
+
+        private void SaveSettings()
+        {
+            try
+            {
+                using (RegistryKey key = Registry.CurrentUser.CreateSubKey(@"Software\PCOptimizer"))
+                {
+                    key.SetValue("FontSize", currentFontSize, RegistryValueKind.DWord);
+                }
+            }
+            catch { }
         }
 
         private GraphicsPath GetRoundPath(RectangleF rect, int radius)
@@ -41,113 +69,269 @@ namespace PCOptimizer
 
         private void InitializeComponent()
         {
-            this.Text = "PC Optimizer Pro + Skin Boost";
-            this.Size = new Size(460, 460);
-            this.BackColor = Color.FromArgb(18, 18, 18);
-            this.FormBorderStyle = FormBorderStyle.FixedDialog;
-            this.MaximizeBox = false;
+            this.Text = "PC Optimizer Pro";
+            this.Size = new Size(500, 650);
+            this.MinimumSize = new Size(400, 550);
+            this.BackColor = Color.FromArgb(20, 20, 20);
             this.StartPosition = FormStartPosition.CenterScreen;
+            this.Font = new Font("Segoe UI", currentFontSize, FontStyle.Regular);
 
-            lblInfo = new Label();
-            lblInfo.Text = "ОПТИМИЗАЦИЯ WINDOWS И MINECRAFT";
-            lblInfo.ForeColor = Color.FromArgb(255, 215, 0);
-            lblInfo.Font = new Font("Segoe UI", 14, FontStyle.Bold);
-            lblInfo.Location = new Point(0, 20);
-            lblInfo.Size = new Size(460, 30);
-            lblInfo.TextAlign = ContentAlignment.MiddleCenter;
-            this.Controls.Add(lblInfo);
+            layout = new TableLayoutPanel();
+            layout.Dock = DockStyle.Fill;
+            layout.ColumnCount = 2;
+            layout.RowCount = 10;
+            layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+            layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 45F));
+            
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 45));
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 45));
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 45));
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 45));
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 45));
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 45));
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 45));
+            layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
-            // Кнопка ВКЛ
-            btnOn = new Button();
-            btnOn.Text = "ВКЛ";
-            btnOn.Location = new Point(45, 80);
-            btnOn.Size = new Size(170, 50);
-            btnOn.BackColor = Color.FromArgb(0, 200, 100);
-            btnOn.ForeColor = Color.White;
-            btnOn.FlatStyle = FlatStyle.Flat;
-            btnOn.FlatAppearance.BorderSize = 0;
-            btnOn.Font = new Font("Segoe UI", 14, FontStyle.Bold);
-            btnOn.Cursor = Cursors.Hand;
-            btnOn.Click += new EventHandler(BtnOn_Click);
-            btnOn.Paint += (s, e) => { btnOn.Region = new Region(GetRoundPath(new RectangleF(0, 0, btnOn.Width, btnOn.Height), 20)); e.Graphics.SmoothingMode = SmoothingMode.AntiAlias; };
-            this.Controls.Add(btnOn);
+            this.Controls.Add(layout);
 
-            // Кнопка ВЫКЛ
-            btnOff = new Button();
-            btnOff.Text = "ВЫКЛ";
-            btnOff.Location = new Point(245, 80);
-            btnOff.Size = new Size(170, 50);
-            btnOff.BackColor = Color.FromArgb(220, 50, 50);
-            btnOff.ForeColor = Color.White;
-            btnOff.FlatStyle = FlatStyle.Flat;
-            btnOff.FlatAppearance.BorderSize = 0;
-            btnOff.Font = new Font("Segoe UI", 14, FontStyle.Bold);
-            btnOff.Cursor = Cursors.Hand;
-            btnOff.Enabled = false;
-            btnOff.Click += new EventHandler(BtnOff_Click);
-            btnOff.Paint += (s, e) => { btnOff.Region = new Region(GetRoundPath(new RectangleF(0, 0, btnOff.Width, btnOff.Height), 20)); e.Graphics.SmoothingMode = SmoothingMode.AntiAlias; };
-            this.Controls.Add(btnOff);
+            Label lblTitle = new Label();
+            lblTitle.Text = "ОПТИМИЗАТОР";
+            lblTitle.ForeColor = Color.Gold;
+            lblTitle.Font = new Font("Segoe UI", currentFontSize + 2, FontStyle.Bold);
+            lblTitle.Dock = DockStyle.Fill;
+            lblTitle.TextAlign = ContentAlignment.MiddleCenter;
+            layout.Controls.Add(lblTitle, 0, 0);
 
-            // Кнопка СКИНЫ
-            btnPack = new Button();
-            btnPack.Text = "УПРОСТИТЬ СКИНЫ (7 ЦВЕТОВ)";
-            btnPack.Location = new Point(45, 150);
-            btnPack.Size = new Size(370, 50);
-            btnPack.BackColor = Color.FromArgb(100, 100, 255);
-            btnPack.ForeColor = Color.White;
-            btnPack.FlatStyle = FlatStyle.Flat;
-            btnPack.FlatAppearance.BorderSize = 0;
-            btnPack.Font = new Font("Segoe UI", 12, FontStyle.Bold);
-            btnPack.Cursor = Cursors.Hand;
-            btnPack.Click += new EventHandler(BtnPack_Click);
-            btnPack.Paint += (s, e) => { btnPack.Region = new Region(GetRoundPath(new RectangleF(0, 0, btnPack.Width, btnPack.Height), 20)); e.Graphics.SmoothingMode = SmoothingMode.AntiAlias; };
-            this.Controls.Add(btnPack);
+            Button btnSettings = new Button();
+            btnSettings.Text = "⚙";
+            btnSettings.Font = new Font("Segoe UI", 14, FontStyle.Bold);
+            btnSettings.ForeColor = Color.White;
+            btnSettings.BackColor = Color.Transparent;
+            btnSettings.FlatStyle = FlatStyle.Flat;
+            btnSettings.FlatAppearance.BorderSize = 0;
+            btnSettings.Cursor = Cursors.Hand;
+            btnSettings.Dock = DockStyle.Fill;
+            btnSettings.Click += BtnSettings_Click;
+            layout.Controls.Add(btnSettings, 1, 0);
 
-            // Статус
+            lblPing = new Label();
+            lblPing.Text = "Пинг FunTime: измерение...";
+            lblPing.ForeColor = Color.Cyan;
+            lblPing.Font = new Font("Segoe UI", currentFontSize, FontStyle.Bold);
+            lblPing.Dock = DockStyle.Fill;
+            lblPing.TextAlign = ContentAlignment.MiddleCenter;
+            layout.Controls.Add(lblPing, 0, 1);
+            layout.SetColumnSpan(lblPing, 2);
+
+            layout.Controls.Add(CreateButton("Очистить RAM", "Освобождает оперативную память.", Color.DodgerBlue, BtnRam_Click), 0, 2);
+            layout.Controls.Add(CreateButton("Очистить Кэш", "Удаляет временные файлы и мусор.", Color.MediumSeaGreen, BtnCache_Click), 0, 3);
+            layout.Controls.Add(CreateButton("Ускорить Сеть", "Сбрасывает DNS для снижения пинга.", Color.DarkOrange, BtnNet_Click), 0, 4);
+            layout.Controls.Add(CreateButton("Макс. Производительность", "Ставит режим высокой производительности.", Color.Purple, BtnPower_Click), 0, 5);
+            layout.Controls.Add(CreateButton("Упростить Скины", "Создает 7-цветные скины.", Color.MediumVioletRed, BtnPack_Click), 0, 6);
+            layout.Controls.Add(CreateButton("Перезапустить игру", "Закрывает процесс Майнкрафта.", Color.Gold, BtnRestart_Click), 0, 7);
+            layout.Controls.Add(CreateButton("Вернуть Настройки", "Возвращает стандартные настройки Windows.", Color.IndianRed, BtnOff_Click), 0, 8);
+
             lblStatus = new Label();
-            lblStatus.Text = "Статус: Ожидание";
-            lblStatus.ForeColor = Color.White;
-            lblStatus.Font = new Font("Segoe UI", 11, FontStyle.Regular);
-            lblStatus.Location = new Point(0, 230);
-            lblStatus.Size = new Size(460, 30);
+            lblStatus.Text = "Готов к работе";
+            lblStatus.ForeColor = Color.LightGray;
+            lblStatus.Dock = DockStyle.Fill;
             lblStatus.TextAlign = ContentAlignment.MiddleCenter;
-            this.Controls.Add(lblStatus);
+            layout.Controls.Add(lblStatus, 0, 9);
+            layout.SetColumnSpan(lblStatus, 2);
+        }
 
-            // Описание
-            Label lblDesc = new Label();
-            lblDesc.Text = "ВКЛ: Очистка памяти, кэша, настройка сети и питания.\nВЫКЛ: Возврат настроек Windows.\nУПРОСТИТЬ СКИНЫ: Создает ресурспак для Майнкрафта.";
-            lblDesc.ForeColor = Color.Gray;
-            lblDesc.Font = new Font("Segoe UI", 9, FontStyle.Regular);
-            lblDesc.Location = new Point(0, 290);
-            lblDesc.Size = new Size(460, 80);
-            lblDesc.TextAlign = ContentAlignment.MiddleCenter;
-            this.Controls.Add(lblDesc);
+        private Button CreateButton(string text, string tooltip, Color color, EventHandler clickEvent)
+        {
+            Button btn = new Button();
+            btn.Text = text;
+            btn.Dock = DockStyle.Fill;
+            btn.Margin = new Padding(20, 2, 20, 2);
+            btn.BackColor = color;
+            btn.ForeColor = Color.White;
+            btn.FlatStyle = FlatStyle.Flat;
+            btn.FlatAppearance.BorderSize = 0;
+            btn.Font = new Font("Segoe UI", currentFontSize, FontStyle.Bold);
+            btn.Cursor = Cursors.Hand;
+            btn.Click += clickEvent;
+
+            ToolTip tip = new ToolTip();
+            tip.SetToolTip(btn, tooltip);
+            return btn;
+        }
+
+        private void BtnSettings_Click(object sender, EventArgs e)
+        {
+            Form settingsForm = new Form();
+            settingsForm.Text = "Настройки шрифта";
+            settingsForm.Size = new Size(300, 200);
+            settingsForm.StartPosition = FormStartPosition.CenterParent;
+            settingsForm.BackColor = Color.FromArgb(30, 30, 30);
+            settingsForm.FormBorderStyle = FormBorderStyle.FixedDialog;
+            settingsForm.MaximizeBox = false;
+
+            Label lbl = new Label();
+            lbl.Text = "Размер шрифта (от 8 до 24):";
+            lbl.ForeColor = Color.White;
+            lbl.Location = new Point(20, 20);
+            lbl.Size = new Size(250, 30);
+
+            NumericUpDown num = new NumericUpDown();
+            num.Location = new Point(20, 50);
+            num.Size = new Size(100, 30);
+            num.Minimum = 8;
+            num.Maximum = 24;
+            num.Value = currentFontSize;
+
+            Button btnSave = new Button();
+            btnSave.Text = "Применить";
+            btnSave.Location = new Point(20, 100);
+            btnSave.Size = new Size(100, 40);
+            btnSave.BackColor = Color.Green;
+            btnSave.ForeColor = Color.White;
+            btnSave.FlatStyle = FlatStyle.Flat;
+            btnSave.Click += (s, ev) => {
+                currentFontSize = (int)num.Value;
+                SaveSettings();
+                MessageBox.Show("Шрифт сохранен! Программа перезапустится.", "Готово");
+                Application.Restart();
+                Environment.Exit(0);
+            };
+
+            settingsForm.Controls.Add(lbl);
+            settingsForm.Controls.Add(num);
+            settingsForm.Controls.Add(btnSave);
+            settingsForm.ShowDialog();
+        }
+
+        private void BtnRestart_Click(object sender, EventArgs e)
+        {
+            var procs = Process.GetProcessesByName("javaw");
+            if (procs.Length > 0)
+            {
+                foreach (var p in procs) { try { p.Kill(); } catch { } }
+                lblStatus.Text = "Игра перезапущена!";
+            }
+            else
+            {
+                lblStatus.Text = "Игра не запущена.";
+            }
+        }
+
+        private void StartPingMonitor()
+        {
+            pingTimer = new Timer();
+            pingTimer.Interval = 1000;
+            pingTimer.Tick += PingTimer_Tick;
+            pingTimer.Start();
+        }
+
+        private void PingTimer_Tick(object sender, EventArgs e)
+        {
+            try
+            {
+                using (Ping p = new Ping())
+                {
+                    PingReply reply = p.Send("mc.funtime.su", 1000);
+                    if (reply != null && reply.Status == IPStatus.Success)
+                    {
+                        lblPing.Text = "Пинг FunTime: " + reply.RoundtripTime + " мс";
+                        if (reply.RoundtripTime < 50) lblPing.ForeColor = Color.LimeGreen;
+                        else if (reply.RoundtripTime < 100) lblPing.ForeColor = Color.Yellow;
+                        else lblPing.ForeColor = Color.Red;
+                    }
+                    else
+                    {
+                        lblPing.Text = "Пинг FunTime: Нет ответа";
+                        lblPing.ForeColor = Color.Gray;
+                    }
+                }
+            }
+            catch
+            {
+                lblPing.Text = "Пинг FunTime: Ошибка";
+                lblPing.ForeColor = Color.Red;
+            }
+        }
+
+        private void BtnRam_Click(object sender, EventArgs e)
+        {
+            lblStatus.Text = "Очистка RAM...";
+            Application.DoEvents();
+            Process[] processes = Process.GetProcesses();
+            foreach (Process proc in processes)
+            {
+                try { EmptyWorkingSet(proc.Handle); } catch { }
+            }
+            lblStatus.Text = "RAM успешно очищена!";
+        }
+
+        private void BtnCache_Click(object sender, EventArgs e)
+        {
+            lblStatus.Text = "Очистка кэша...";
+            Application.DoEvents();
+            try
+            {
+                string mcPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), ".minecraft");
+                if (Directory.Exists(mcPath))
+                {
+                    string[] dirsToClear = { "logs", "crash-reports", "webcache2" };
+                    foreach (var dir in dirsToClear)
+                    {
+                        string fullPath = Path.Combine(mcPath, dir);
+                        if (Directory.Exists(fullPath))
+                        {
+                            DirectoryInfo di = new DirectoryInfo(fullPath);
+                            foreach (FileInfo file in di.GetFiles()) file.Delete();
+                        }
+                    }
+                }
+                
+                string tempPath = Path.GetTempPath();
+                DirectoryInfo diTemp = new DirectoryInfo(tempPath);
+                foreach (FileInfo file in diTemp.GetFiles()) {
+                    try { file.Delete(); } catch { }
+                }
+                lblStatus.Text = "Кэш очищен!";
+            }
+            catch { lblStatus.Text = "Ошибка очистки."; }
+        }
+
+        private void BtnNet_Click(object sender, EventArgs e)
+        {
+            lblStatus.Text = "Настройка сети...";
+            ProcessStartInfo psiNet = new ProcessStartInfo("cmd.exe", "/c ipconfig /flushdns & netsh int tcp set global autotuninglevel=normal");
+            psiNet.WindowStyle = ProcessWindowStyle.Hidden;
+            psiNet.CreateNoWindow = true;
+            Process.Start(psiNet);
+            lblStatus.Text = "Сеть ускорена.";
+        }
+
+        private void BtnPower_Click(object sender, EventArgs e)
+        {
+            lblStatus.Text = "Настройка питания...";
+            ProcessStartInfo psi2 = new ProcessStartInfo("powercfg", "/setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c");
+            psi2.WindowStyle = ProcessWindowStyle.Hidden;
+            psi2.CreateNoWindow = true;
+            Process.Start(psi2);
+            lblStatus.Text = "Производительность включена.";
         }
 
         private void BtnPack_Click(object sender, EventArgs e)
         {
-            lblStatus.Text = "Статус: Создание ресурспака...";
-            lblStatus.ForeColor = Color.Yellow;
+            lblStatus.Text = "Создание скинов...";
             Application.DoEvents();
-
             try
             {
-                string appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-                string mcPath = Path.Combine(appData, ".minecraft");
-                
-                if (!Directory.Exists(mcPath)) {
-                    lblStatus.Text = "Ошибка: Папка .minecraft не найдена!";
-                    lblStatus.ForeColor = Color.Red;
-                    return;
-                }
+                string mcPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), ".minecraft");
+                if (!Directory.Exists(mcPath)) { lblStatus.Text = "Ошибка: .minecraft нет!"; return; }
 
                 string rpPath = Path.Combine(mcPath, "resourcepacks", "NoSkinLag");
                 string texturePath = Path.Combine(rpPath, "assets", "minecraft", "textures", "entity");
-
                 Directory.CreateDirectory(texturePath);
 
-                File.WriteAllText(Path.Combine(rpPath, "pack.mcmeta"), 
-                    "{\n  \"pack\": {\n    \"pack_format\": 15,\n    \"description\": \"7-Color Skins\"\n  }\n}");
+                File.WriteAllText(Path.Combine(rpPath, "pack.mcmeta"), "{\n  \"pack\": {\n    \"pack_format\": 15,\n    \"description\": \"7-Color Skins\"\n  }\n}");
 
                 using (Bitmap bmp = new Bitmap(64, 64))
                 {
@@ -163,152 +347,35 @@ namespace PCOptimizer
                                 colorIndex++;
                             }
                         }
-
                         using (SolidBrush blackBrush = new SolidBrush(Color.Black))
                         {
-                            g.FillRectangle(blackBrush, 9, 11, 2, 2); // Левый глаз
-                            g.FillRectangle(blackBrush, 13, 11, 2, 2); // Правый глаз
-                            g.FillRectangle(blackBrush, 9, 14, 6, 1); // Рот
-                            g.FillRectangle(blackBrush, 8, 13, 1, 1); // Уголок рта
-                            g.FillRectangle(blackBrush, 15, 13, 1, 1); // Уголок рта
+                            g.FillRectangle(blackBrush, 9, 11, 2, 2); g.FillRectangle(blackBrush, 13, 11, 2, 2);
+                            g.FillRectangle(blackBrush, 9, 14, 6, 1); g.FillRectangle(blackBrush, 8, 13, 1, 1);
+                            g.FillRectangle(blackBrush, 15, 13, 1, 1);
                         }
                     }
                     bmp.Save(Path.Combine(texturePath, "steve.png"), System.Drawing.Imaging.ImageFormat.Png);
                     bmp.Save(Path.Combine(texturePath, "alex.png"), System.Drawing.Imaging.ImageFormat.Png);
                 }
-
-                lblStatus.Text = "Статус: Ресурспак создан! Включите его в игре.";
-                lblStatus.ForeColor = Color.FromArgb(0, 230, 118);
+                lblStatus.Text = "Скины созданы!";
             }
-            catch (Exception ex)
-            {
-                lblStatus.Text = "Ошибка: " + ex.Message;
-                lblStatus.ForeColor = Color.Red;
-            }
-        }
-
-        private void LoadStatus()
-        {
-            if (File.Exists(statusPath))
-            {
-                string status = File.ReadAllText(statusPath).Trim();
-                if (status == "ON")
-                {
-                    isOptimized = true;
-                    btnOn.Enabled = false;
-                    btnOn.BackColor = Color.FromArgb(50, 50, 50);
-                    btnOff.Enabled = true;
-                    btnOff.BackColor = Color.FromArgb(220, 50, 50);
-                    lblStatus.Text = "Статус: Оптимизировано";
-                    lblStatus.ForeColor = Color.FromArgb(0, 230, 118);
-                }
-            }
-        }
-
-        private void SaveStatus(string status)
-        {
-            try { File.WriteAllText(statusPath, status); } catch { }
-        }
-
-        private void BtnOn_Click(object sender, EventArgs e)
-        {
-            if (isOptimized) return;
-            lblStatus.Text = "Статус: Оптимизация...";
-            lblStatus.ForeColor = Color.Yellow;
-            Application.DoEvents();
-
-            try
-            {
-                string appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
-                string mcPath = Path.Combine(appData, ".minecraft");
-                if (Directory.Exists(mcPath))
-                {
-                    string[] dirsToClear = { "logs", "crash-reports", "webcache2" };
-                    foreach (var dir in dirsToClear)
-                    {
-                        string fullPath = Path.Combine(mcPath, dir);
-                        if (Directory.Exists(fullPath))
-                        {
-                            try {
-                                DirectoryInfo di = new DirectoryInfo(fullPath);
-                                foreach (FileInfo file in di.GetFiles()) file.Delete();
-                            } catch { }
-                        }
-                    }
-                }
-
-                string tempPath = Path.GetTempPath();
-                try {
-                    DirectoryInfo di = new DirectoryInfo(tempPath);
-                    foreach (FileInfo file in di.GetFiles()) {
-                        try { file.Delete(); } catch { }
-                    }
-                } catch { }
-
-                ProcessStartInfo psiNet = new ProcessStartInfo("cmd.exe", "/c ipconfig /flushdns & netsh int tcp set global autotuninglevel=normal");
-                psiNet.WindowStyle = ProcessWindowStyle.Hidden;
-                psiNet.CreateNoWindow = true;
-                Process.Start(psiNet);
-
-                Process[] processes = Process.GetProcesses();
-                foreach (Process proc in processes) {
-                    try { EmptyWorkingSet(proc.Handle); } catch { }
-                }
-
-                ProcessStartInfo psi2 = new ProcessStartInfo("powercfg", "/setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c");
-                psi2.WindowStyle = ProcessWindowStyle.Hidden;
-                psi2.CreateNoWindow = true;
-                Process.Start(psi2);
-
-                lblStatus.Text = "Статус: Успешно!";
-                lblStatus.ForeColor = Color.FromArgb(0, 230, 118);
-                btnOn.Enabled = false;
-                btnOn.BackColor = Color.FromArgb(50, 50, 50);
-                btnOff.Enabled = true;
-                btnOff.BackColor = Color.FromArgb(220, 50, 50);
-                isOptimized = true;
-                SaveStatus("ON"); 
-            }
-            catch (Exception ex)
-            {
-                lblStatus.Text = "Ошибка: " + ex.Message;
-                lblStatus.ForeColor = Color.Red;
-            }
+            catch { lblStatus.Text = "Ошибка."; }
         }
 
         private void BtnOff_Click(object sender, EventArgs e)
         {
-            if (!isOptimized) return;
-            lblStatus.Text = "Статус: Восстановление...";
-            lblStatus.ForeColor = Color.Yellow;
-            Application.DoEvents();
+            lblStatus.Text = "Сброс...";
+            ProcessStartInfo psi = new ProcessStartInfo("powercfg", "/setactive 381b4222-f694-41f0-9685-ff5bb260df2e");
+            psi.WindowStyle = ProcessWindowStyle.Hidden;
+            psi.CreateNoWindow = true;
+            Process.Start(psi);
 
-            try
-            {
-                ProcessStartInfo psi = new ProcessStartInfo("powercfg", "/setactive 381b4222-f694-41f0-9685-ff5bb260df2e");
-                psi.WindowStyle = ProcessWindowStyle.Hidden;
-                psi.CreateNoWindow = true;
-                Process.Start(psi);
+            ProcessStartInfo psiNet = new ProcessStartInfo("cmd.exe", "/c netsh int tcp set global autotuninglevel=restricted");
+            psiNet.WindowStyle = ProcessWindowStyle.Hidden;
+            psiNet.CreateNoWindow = true;
+            Process.Start(psiNet);
 
-                ProcessStartInfo psiNet = new ProcessStartInfo("cmd.exe", "/c netsh int tcp set global autotuninglevel=restricted");
-                psiNet.WindowStyle = ProcessWindowStyle.Hidden;
-                psiNet.CreateNoWindow = true;
-                Process.Start(psiNet);
-
-                lblStatus.Text = "Статус: Восстановлено";
-                lblStatus.ForeColor = Color.FromArgb(255, 82, 82);
-                btnOn.Enabled = true;
-                btnOn.BackColor = Color.FromArgb(0, 200, 100);
-                btnOff.Enabled = false;
-                btnOff.BackColor = Color.FromArgb(50, 50, 50);
-                isOptimized = false;
-                SaveStatus("OFF"); 
-            }
-            catch (Exception ex)
-            {
-                lblStatus.Text = "Ошибка: " + ex.Message;
-                lblStatus.ForeColor = Color.Red;
-            }
+            lblStatus.Text = "Настройки сброшены.";
         }
 
         [STAThread]
