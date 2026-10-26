@@ -29,25 +29,25 @@ namespace PCOptimizer
 
         private void InitializeComponent()
         {
-            this.Text = "PC Optimizer";
-            this.Size = new Size(400, 300);
-            this.BackColor = Color.FromArgb(30, 30, 30);
+            this.Text = "PC Optimizer Pro";
+            this.Size = new Size(420, 320);
+            this.BackColor = Color.FromArgb(25, 25, 25);
             this.FormBorderStyle = FormBorderStyle.FixedDialog;
             this.MaximizeBox = false;
             this.StartPosition = FormStartPosition.CenterScreen;
 
             lblInfo = new Label();
-            lblInfo.Text = "Оптимизация системы и Minecraft";
+            lblInfo.Text = "Полная оптимизация Windows и Minecraft";
             lblInfo.ForeColor = Color.LightGray;
             lblInfo.Location = new Point(50, 20);
-            lblInfo.Size = new Size(300, 20);
+            lblInfo.Size = new Size(320, 20);
             lblInfo.TextAlign = ContentAlignment.MiddleCenter;
             this.Controls.Add(lblInfo);
 
             btnOn = new Button();
             btnOn.Text = "ВКЛ";
-            btnOn.Location = new Point(80, 70);
-            btnOn.Size = new Size(100, 50);
+            btnOn.Location = new Point(70, 70);
+            btnOn.Size = new Size(120, 50);
             btnOn.BackColor = Color.FromArgb(0, 230, 118);
             btnOn.FlatStyle = FlatStyle.Flat;
             btnOn.Font = new Font("Arial", 14, FontStyle.Bold);
@@ -57,7 +57,7 @@ namespace PCOptimizer
             btnOff = new Button();
             btnOff.Text = "ВЫКЛ";
             btnOff.Location = new Point(220, 70);
-            btnOff.Size = new Size(100, 50);
+            btnOff.Size = new Size(120, 50);
             btnOff.BackColor = Color.FromArgb(255, 82, 82);
             btnOff.FlatStyle = FlatStyle.Flat;
             btnOff.Font = new Font("Arial", 14, FontStyle.Bold);
@@ -69,15 +69,15 @@ namespace PCOptimizer
             lblStatus.Text = "Статус: Ожидание";
             lblStatus.ForeColor = Color.White;
             lblStatus.Location = new Point(50, 150);
-            lblStatus.Size = new Size(300, 20);
+            lblStatus.Size = new Size(320, 20);
             lblStatus.TextAlign = ContentAlignment.MiddleCenter;
             this.Controls.Add(lblStatus);
 
             Label lblDesc = new Label();
-            lblDesc.Text = "ВКЛ: Ускорение ПК и очистка Minecraft.\nВЫКЛ: Возврат настроек обратно.";
+            lblDesc.Text = "ВКЛ: Очистка RAM, кэша, Temp, настройка сети и питания.\nВЫКЛ: Возврат стандартных настроек Windows.";
             lblDesc.ForeColor = Color.Gray;
-            lblDesc.Location = new Point(50, 200);
-            lblDesc.Size = new Size(300, 40);
+            lblDesc.Location = new Point(30, 200);
+            lblDesc.Size = new Size(360, 60);
             lblDesc.TextAlign = ContentAlignment.MiddleCenter;
             this.Controls.Add(lblDesc);
         }
@@ -111,6 +111,7 @@ namespace PCOptimizer
 
             try
             {
+                // 1. Очистка Minecraft
                 string appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
                 string mcPath = Path.Combine(appData, ".minecraft");
                 if (Directory.Exists(mcPath))
@@ -129,14 +130,32 @@ namespace PCOptimizer
                     }
                 }
 
+                // 2. Очистка Temp
+                string tempPath = Path.GetTempPath();
+                try {
+                    DirectoryInfo di = new DirectoryInfo(tempPath);
+                    foreach (FileInfo file in di.GetFiles()) {
+                        try { file.Delete(); } catch { }
+                    }
+                } catch { }
+
+                // 3. Сброс DNS и сеть
+                ProcessStartInfo psiNet = new ProcessStartInfo("cmd.exe", "/c ipconfig /flushdns & netsh int tcp set global autotuninglevel=normal");
+                psiNet.WindowStyle = ProcessWindowStyle.Hidden;
+                psiNet.CreateNoWindow = true;
+                Process.Start(psiNet);
+
+                // 4. Отключение визуальных эффектов
                 RegistryKey key = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects", true);
                 if (key != null) { key.SetValue("VisualFXSetting", 2, RegistryValueKind.DWord); key.Close(); }
 
+                // 5. Очистка RAM
                 Process[] processes = Process.GetProcesses();
                 foreach (Process proc in processes) {
                     try { EmptyWorkingSet(proc.Handle); } catch { }
                 }
 
+                // 6. Высокая производительность
                 ProcessStartInfo psi2 = new ProcessStartInfo("powercfg", "/setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c");
                 psi2.WindowStyle = ProcessWindowStyle.Hidden;
                 psi2.CreateNoWindow = true;
@@ -164,13 +183,21 @@ namespace PCOptimizer
 
             try
             {
+                // 1. Возвращаем визуальные эффекты
                 RegistryKey key = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects", true);
                 if (key != null) { key.SetValue("VisualFXSetting", 1, RegistryValueKind.DWord); key.Close(); }
 
+                // 2. Сбалансированная схема питания
                 ProcessStartInfo psi = new ProcessStartInfo("powercfg", "/setactive 381b4222-f694-41f0-9685-ff5bb260df2e");
                 psi.WindowStyle = ProcessWindowStyle.Hidden;
                 psi.CreateNoWindow = true;
                 Process.Start(psi);
+
+                // 3. Сброс сети
+                ProcessStartInfo psiNet = new ProcessStartInfo("cmd.exe", "/c netsh int tcp set global autotuninglevel=restricted");
+                psiNet.WindowStyle = ProcessWindowStyle.Hidden;
+                psiNet.CreateNoWindow = true;
+                Process.Start(psiNet);
 
                 lblStatus.Text = "Статус: Восстановлено";
                 lblStatus.ForeColor = Color.FromArgb(255, 82, 82);
