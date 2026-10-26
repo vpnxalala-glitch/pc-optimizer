@@ -11,13 +11,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       
-      - name: Setup MSBuild
-        uses: microsoft/setup-msbuild@v1.3
-
       - name: Compile C# Code
         run: |
           cd ${{ github.workspace }}
-          & "C:\Windows\Microsoft.NET\Framework\v4.0.30319\csc.exe" /target:winexe /out:PC_Optimizer.exe Program.cs
+          & "C:\Windows\Microsoft.NET\Framework\v4.0.30319\csc.exe" /target:winexe /r:System.Windows.Forms.dll /r:System.Drawing.dll /out:PC_Optimizer.exe Program.cs
           
       - name: Upload EXE
         uses: actions/upload-artifact@v4
