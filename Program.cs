@@ -56,7 +56,9 @@ namespace PCOptimizer
                         } catch { }
                     }
                 }
-                Console.WriteLine($"Готово! Освобождено {deletedSize / 1024 / 1024} МБ.");
+                // Убрали символ $, теперь конкатенация строк
+                long mb = deletedSize / 1024 / 1024;
+                Console.WriteLine("Готово! Освобождено " + mb + " МБ.");
             } else {
                 Console.WriteLine("Minecraft не найден.");
             }
