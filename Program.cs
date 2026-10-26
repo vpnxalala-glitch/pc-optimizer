@@ -4,7 +4,6 @@ using System.IO;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
 using System.Drawing;
-using System.Drawing.Drawing2D;
 using System.Net.NetworkInformation;
 using Microsoft.Win32;
 
@@ -20,51 +19,36 @@ namespace PCOptimizer
         private Label lblStatus;
         private Timer pingTimer;
         private int currentFontSize = 10;
+        
+        string statusPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "PCOptimizer_Status.txt");
 
         public MainForm()
         {
             LoadSettings();
             InitializeComponent();
+            LoadStatus();
             StartPingMonitor();
         }
 
         private void LoadSettings()
         {
-            try
-            {
-                using (RegistryKey key = Registry.CurrentUser.OpenSubKey(@"Software\PCOptimizer"))
-                {
-                    if (key != null)
-                    {
+            try {
+                using (RegistryKey key = Registry.CurrentUser.OpenSubKey(@"Software\PCOptimizer")) {
+                    if (key != null) {
                         object val = key.GetValue("FontSize");
                         if (val != null) currentFontSize = (int)val;
                     }
                 }
-            }
-            catch { }
+            } catch { }
         }
 
         private void SaveSettings()
         {
-            try
-            {
-                using (RegistryKey key = Registry.CurrentUser.CreateSubKey(@"Software\PCOptimizer"))
-                {
+            try {
+                using (RegistryKey key = Registry.CurrentUser.CreateSubKey(@"Software\PCOptimizer")) {
                     key.SetValue("FontSize", currentFontSize, RegistryValueKind.DWord);
                 }
-            }
-            catch { }
-        }
-
-        private GraphicsPath GetRoundPath(RectangleF rect, int radius)
-        {
-            GraphicsPath path = new GraphicsPath();
-            path.AddArc(rect.X, rect.Y, radius, radius, 180, 90);
-            path.AddArc(rect.Width - radius, rect.Y, radius, radius, 270, 90);
-            path.AddArc(rect.Width - radius, rect.Height - radius, radius, radius, 0, 90);
-            path.AddArc(rect.X, rect.Height - radius, radius, radius, 90, 90);
-            path.CloseFigure();
-            return path;
+            } catch { }
         }
 
         private void InitializeComponent()
@@ -79,20 +63,17 @@ namespace PCOptimizer
             layout = new TableLayoutPanel();
             layout.Dock = DockStyle.Fill;
             layout.ColumnCount = 2;
-            layout.RowCount = 10;
+            layout.RowCount = 11;
             layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
             layout.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 45F));
             
             layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));
             layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
-            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 45));
-            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 45));
-            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 45));
-            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 45));
-            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 45));
-            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 45));
-            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 45));
-            layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 45)); // ВКЛ
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 45)); // ВЫКЛ
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 45)); // Скины
+            layout.RowStyles.Add(new RowStyle(SizeType.Absolute, 45)); // Перезапуск
+            layout.RowStyles.Add(new RowStyle(SizeType.Percent, 100)); // Статус
 
             this.Controls.Add(layout);
 
@@ -125,20 +106,17 @@ namespace PCOptimizer
             layout.Controls.Add(lblPing, 0, 1);
             layout.SetColumnSpan(lblPing, 2);
 
-            layout.Controls.Add(CreateButton("Очистить RAM", "Освобождает оперативную память.", Color.DodgerBlue, BtnRam_Click), 0, 2);
-            layout.Controls.Add(CreateButton("Очистить Кэш", "Удаляет временные файлы и мусор.", Color.MediumSeaGreen, BtnCache_Click), 0, 3);
-            layout.Controls.Add(CreateButton("Ускорить Сеть", "Сбрасывает DNS для снижения пинга.", Color.DarkOrange, BtnNet_Click), 0, 4);
-            layout.Controls.Add(CreateButton("Макс. Производительность", "Ставит режим высокой производительности.", Color.Purple, BtnPower_Click), 0, 5);
-            layout.Controls.Add(CreateButton("Упростить Скины", "Создает 7-цветные скины.", Color.MediumVioletRed, BtnPack_Click), 0, 6);
-            layout.Controls.Add(CreateButton("Перезапустить игру", "Закрывает процесс Майнкрафта.", Color.Gold, BtnRestart_Click), 0, 7);
-            layout.Controls.Add(CreateButton("Вернуть Настройки", "Возвращает стандартные настройки Windows.", Color.IndianRed, BtnOff_Click), 0, 8);
+            layout.Controls.Add(CreateButton("ВКЛ (Оптимизация)", "Чистит память, сеть, питание.", Color.FromArgb(0, 200, 100), BtnOn_Click), 0, 2);
+            layout.Controls.Add(CreateButton("ВЫКЛ (Возврат)", "Сбрасывает настройки Windows.", Color.IndianRed, BtnOff_Click), 0, 3);
+            layout.Controls.Add(CreateButton("Создать Скины + Открыть", "Создает пак и открывает папку.", Color.MediumVioletRed, BtnPack_Click), 0, 4);
+            layout.Controls.Add(CreateButton("Перезапуск Игры", "Закрывает и открывает лаунчер заново.", Color.Gold, BtnRestart_Click), 0, 5);
 
             lblStatus = new Label();
             lblStatus.Text = "Готов к работе";
             lblStatus.ForeColor = Color.LightGray;
             lblStatus.Dock = DockStyle.Fill;
             lblStatus.TextAlign = ContentAlignment.MiddleCenter;
-            layout.Controls.Add(lblStatus, 0, 9);
+            layout.Controls.Add(lblStatus, 0, 6);
             layout.SetColumnSpan(lblStatus, 2);
         }
 
@@ -159,6 +137,202 @@ namespace PCOptimizer
             ToolTip tip = new ToolTip();
             tip.SetToolTip(btn, tooltip);
             return btn;
+        }
+
+        private void LoadStatus()
+        {
+            if (File.Exists(statusPath))
+            {
+                string status = File.ReadAllText(statusPath).Trim();
+                if (status == "ON")
+                {
+                    lblStatus.Text = "Система оптимизирована";
+                    lblStatus.ForeColor = Color.LimeGreen;
+                }
+            }
+        }
+
+        private void SaveStatus(string status)
+        {
+            try { File.WriteAllText(statusPath, status); } catch { }
+        }
+
+        private void BtnOn_Click(object sender, EventArgs e)
+        {
+            lblStatus.Text = "Оптимизация...";
+            Application.DoEvents();
+
+            try
+            {
+                Process[] processes = Process.GetProcesses();
+                foreach (Process proc in processes) { try { EmptyWorkingSet(proc.Handle); } catch { } }
+
+                ProcessStartInfo psiNet = new ProcessStartInfo("cmd.exe", "/c ipconfig /flushdns & netsh int tcp set global autotuninglevel=normal");
+                psiNet.WindowStyle = ProcessWindowStyle.Hidden; psiNet.CreateNoWindow = true; Process.Start(psiNet);
+
+                ProcessStartInfo psi2 = new ProcessStartInfo("powercfg", "/setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c");
+                psi2.WindowStyle = ProcessWindowStyle.Hidden; psi2.CreateNoWindow = true; Process.Start(psi2);
+
+                lblStatus.Text = "Система оптимизирована!";
+                lblStatus.ForeColor = Color.LimeGreen;
+                SaveStatus("ON");
+            }
+            catch (Exception ex) { lblStatus.Text = "Ошибка: " + ex.Message; }
+        }
+
+        private void BtnOff_Click(object sender, EventArgs e)
+        {
+            lblStatus.Text = "Возврат настроек...";
+            Application.DoEvents();
+
+            try
+            {
+                ProcessStartInfo psi = new ProcessStartInfo("powercfg", "/setactive 381b4222-f694-41f0-9685-ff5bb260df2e");
+                psi.WindowStyle = ProcessWindowStyle.Hidden; psi.CreateNoWindow = true; Process.Start(psi);
+
+                ProcessStartInfo psiNet = new ProcessStartInfo("cmd.exe", "/c netsh int tcp set global autotuninglevel=restricted");
+                psiNet.WindowStyle = ProcessWindowStyle.Hidden; psiNet.CreateNoWindow = true; Process.Start(psiNet);
+
+                lblStatus.Text = "Настройки возвращены.";
+                lblStatus.ForeColor = Color.LightGray;
+                SaveStatus("OFF");
+            }
+            catch (Exception ex) { lblStatus.Text = "Ошибка: " + ex.Message; }
+        }
+
+        private void BtnRestart_Click(object sender, EventArgs e)
+        {
+            string[] launchers = { "FunTime", "LegacyLauncher", "TLauncher", "MinecraftLauncher" };
+            string foundLauncher = "";
+            
+            foreach (string l in launchers)
+            {
+                Process[] p = Process.GetProcessesByName(l);
+                if (p.Length > 0) { foundLauncher = p[0].MainModule.FileName; p[0].Kill(); break; }
+            }
+
+            var procs = Process.GetProcessesByName("javaw");
+            foreach (var p in procs) { try { p.Kill(); } catch { } }
+
+            if (!string.IsNullOrEmpty(foundLauncher))
+            {
+                Process.Start(foundLauncher);
+                lblStatus.Text = "Игра и лаунчер перезапущены!";
+            }
+            else
+            {
+                lblStatus.Text = "Игра закрыта. Открой лаунчер вручную.";
+            }
+        }
+
+        private void BtnPack_Click(object sender, EventArgs e)
+        {
+            lblStatus.Text = "Поиск папки игры...";
+            Application.DoEvents();
+            
+            try
+            {
+                string mcPath = FindMinecraftPath();
+                
+                if (mcPath == null) {
+                    lblStatus.Text = "Ошибка: Папка .minecraft не найдена!";
+                    MessageBox.Show("Не удалось найти папку .minecraft. Убедитесь, что игра установлена.", "Ошибка");
+                    return;
+                }
+
+                lblStatus.Text = "Создание скинов...";
+                Application.DoEvents();
+
+                string rpPath = Path.Combine(mcPath, "resourcepacks", "NoSkinLag");
+                string texturePath = Path.Combine(rpPath, "assets", "minecraft", "textures", "entity");
+                Directory.CreateDirectory(texturePath);
+
+                File.WriteAllText(Path.Combine(rpPath, "pack.mcmeta"), "{\n  \"pack\": {\n    \"pack_format\": 15,\n    \"description\": \"7-Color Skins\"\n  }\n}");
+
+                using (Bitmap bmp = new Bitmap(64, 64))
+                {
+                    using (Graphics g = Graphics.FromImage(bmp))
+                    {
+                        Color[] colors = { Color.Red, Color.Orange, Color.Yellow, Color.Green, Color.Cyan, Color.Blue, Color.Purple };
+                        int colorIndex = 0;
+                        for (int x = 0; x < 64; x += 16)
+                            for (int y = 0; y < 64; y += 16) { g.FillRectangle(new SolidBrush(colors[colorIndex % 7]), x, y, 16, 16); colorIndex++; }
+
+                        using (SolidBrush blackBrush = new SolidBrush(Color.Black))
+                        {
+                            g.FillRectangle(blackBrush, 9, 11, 2, 2); g.FillRectangle(blackBrush, 13, 11, 2, 2);
+                            g.FillRectangle(blackBrush, 9, 14, 6, 1); g.FillRectangle(blackBrush, 8, 13, 1, 1);
+                            g.FillRectangle(blackBrush, 15, 13, 1, 1);
+                        }
+                    }
+                    bmp.Save(Path.Combine(texturePath, "steve.png"), System.Drawing.Imaging.ImageFormat.Png);
+                    bmp.Save(Path.Combine(texturePath, "alex.png"), System.Drawing.Imaging.ImageFormat.Png);
+                }
+                
+                Process.Start("explorer.exe", Path.Combine(mcPath, "resourcepacks"));
+                lblStatus.Text = "Скины созданы и папка открыта!";
+            }
+            catch (Exception ex) { lblStatus.Text = "Ошибка: " + ex.Message; }
+        }
+
+        private string FindMinecraftPath()
+        {
+            // 1. Стандартный путь
+            string standardPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), ".minecraft");
+            if (Directory.Exists(standardPath)) return standardPath;
+
+            // 2. Папки популярных лаунчеров
+            string appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+            string localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            
+            string[] possiblePaths = {
+                Path.Combine(appData, "FunTime"),
+                Path.Combine(appData, "FunTimeLauncher"),
+                Path.Combine(appData, ".minecraft_funtime"),
+                Path.Combine(localAppData, "FunTime"),
+                Path.Combine(appData, "TLauncher"),
+                Path.Combine(appData, ".tlauncher"),
+                Path.Combine(appData, ".minecraft_tlauncher")
+            };
+
+            foreach (var p in possiblePaths) {
+                if (Directory.Exists(p)) {
+                    // Если это папка лаунчера, проверяем наличие внутри .minecraft
+                    string innerPath = Path.Combine(p, ".minecraft");
+                    if (Directory.Exists(innerPath)) return innerPath;
+                    return p; // Если внутри нет, возвращаем саму папку
+                }
+            }
+
+            return null; // Если ничего не найдено
+        }
+
+        private void StartPingMonitor()
+        {
+            pingTimer = new Timer();
+            pingTimer.Interval = 1000;
+            pingTimer.Tick += PingTimer_Tick;
+            pingTimer.Start();
+        }
+
+        private void PingTimer_Tick(object sender, EventArgs e)
+        {
+            try
+            {
+                using (Ping p = new Ping())
+                {
+                    PingReply reply = p.Send("mc.funtime.su", 1000);
+                    if (reply != null && reply.Status == IPStatus.Success)
+                    {
+                        lblPing.Text = "Пинг FunTime: " + reply.RoundtripTime + " мс";
+                        if (reply.RoundtripTime < 50) lblPing.ForeColor = Color.LimeGreen;
+                        else if (reply.RoundtripTime < 100) lblPing.ForeColor = Color.Yellow;
+                        else lblPing.ForeColor = Color.Red;
+                    }
+                    else { lblPing.Text = "Пинг FunTime: Нет ответа"; lblPing.ForeColor = Color.Gray; }
+                }
+            }
+            catch { lblPing.Text = "Пинг FunTime: Ошибка"; lblPing.ForeColor = Color.Red; }
         }
 
         private void BtnSettings_Click(object sender, EventArgs e)
@@ -194,7 +368,7 @@ namespace PCOptimizer
             btnSave.Click += (s, ev) => {
                 currentFontSize = (int)num.Value;
                 SaveSettings();
-                MessageBox.Show("Шрифт сохранен! Программа перезапустится.", "Готово");
+                MessageBox.Show("Шрифт сохранен! Перезапуск.", "Готово");
                 Application.Restart();
                 Environment.Exit(0);
             };
@@ -203,179 +377,6 @@ namespace PCOptimizer
             settingsForm.Controls.Add(num);
             settingsForm.Controls.Add(btnSave);
             settingsForm.ShowDialog();
-        }
-
-        private void BtnRestart_Click(object sender, EventArgs e)
-        {
-            var procs = Process.GetProcessesByName("javaw");
-            if (procs.Length > 0)
-            {
-                foreach (var p in procs) { try { p.Kill(); } catch { } }
-                lblStatus.Text = "Игра перезапущена!";
-            }
-            else
-            {
-                lblStatus.Text = "Игра не запущена.";
-            }
-        }
-
-        private void StartPingMonitor()
-        {
-            pingTimer = new Timer();
-            pingTimer.Interval = 1000;
-            pingTimer.Tick += PingTimer_Tick;
-            pingTimer.Start();
-        }
-
-        private void PingTimer_Tick(object sender, EventArgs e)
-        {
-            try
-            {
-                using (Ping p = new Ping())
-                {
-                    PingReply reply = p.Send("mc.funtime.su", 1000);
-                    if (reply != null && reply.Status == IPStatus.Success)
-                    {
-                        lblPing.Text = "Пинг FunTime: " + reply.RoundtripTime + " мс";
-                        if (reply.RoundtripTime < 50) lblPing.ForeColor = Color.LimeGreen;
-                        else if (reply.RoundtripTime < 100) lblPing.ForeColor = Color.Yellow;
-                        else lblPing.ForeColor = Color.Red;
-                    }
-                    else
-                    {
-                        lblPing.Text = "Пинг FunTime: Нет ответа";
-                        lblPing.ForeColor = Color.Gray;
-                    }
-                }
-            }
-            catch
-            {
-                lblPing.Text = "Пинг FunTime: Ошибка";
-                lblPing.ForeColor = Color.Red;
-            }
-        }
-
-        private void BtnRam_Click(object sender, EventArgs e)
-        {
-            lblStatus.Text = "Очистка RAM...";
-            Application.DoEvents();
-            Process[] processes = Process.GetProcesses();
-            foreach (Process proc in processes)
-            {
-                try { EmptyWorkingSet(proc.Handle); } catch { }
-            }
-            lblStatus.Text = "RAM успешно очищена!";
-        }
-
-        private void BtnCache_Click(object sender, EventArgs e)
-        {
-            lblStatus.Text = "Очистка кэша...";
-            Application.DoEvents();
-            try
-            {
-                string mcPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), ".minecraft");
-                if (Directory.Exists(mcPath))
-                {
-                    string[] dirsToClear = { "logs", "crash-reports", "webcache2" };
-                    foreach (var dir in dirsToClear)
-                    {
-                        string fullPath = Path.Combine(mcPath, dir);
-                        if (Directory.Exists(fullPath))
-                        {
-                            DirectoryInfo di = new DirectoryInfo(fullPath);
-                            foreach (FileInfo file in di.GetFiles()) file.Delete();
-                        }
-                    }
-                }
-                
-                string tempPath = Path.GetTempPath();
-                DirectoryInfo diTemp = new DirectoryInfo(tempPath);
-                foreach (FileInfo file in diTemp.GetFiles()) {
-                    try { file.Delete(); } catch { }
-                }
-                lblStatus.Text = "Кэш очищен!";
-            }
-            catch { lblStatus.Text = "Ошибка очистки."; }
-        }
-
-        private void BtnNet_Click(object sender, EventArgs e)
-        {
-            lblStatus.Text = "Настройка сети...";
-            ProcessStartInfo psiNet = new ProcessStartInfo("cmd.exe", "/c ipconfig /flushdns & netsh int tcp set global autotuninglevel=normal");
-            psiNet.WindowStyle = ProcessWindowStyle.Hidden;
-            psiNet.CreateNoWindow = true;
-            Process.Start(psiNet);
-            lblStatus.Text = "Сеть ускорена.";
-        }
-
-        private void BtnPower_Click(object sender, EventArgs e)
-        {
-            lblStatus.Text = "Настройка питания...";
-            ProcessStartInfo psi2 = new ProcessStartInfo("powercfg", "/setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c");
-            psi2.WindowStyle = ProcessWindowStyle.Hidden;
-            psi2.CreateNoWindow = true;
-            Process.Start(psi2);
-            lblStatus.Text = "Производительность включена.";
-        }
-
-        private void BtnPack_Click(object sender, EventArgs e)
-        {
-            lblStatus.Text = "Создание скинов...";
-            Application.DoEvents();
-            try
-            {
-                string mcPath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), ".minecraft");
-                if (!Directory.Exists(mcPath)) { lblStatus.Text = "Ошибка: .minecraft нет!"; return; }
-
-                string rpPath = Path.Combine(mcPath, "resourcepacks", "NoSkinLag");
-                string texturePath = Path.Combine(rpPath, "assets", "minecraft", "textures", "entity");
-                Directory.CreateDirectory(texturePath);
-
-                File.WriteAllText(Path.Combine(rpPath, "pack.mcmeta"), "{\n  \"pack\": {\n    \"pack_format\": 15,\n    \"description\": \"7-Color Skins\"\n  }\n}");
-
-                using (Bitmap bmp = new Bitmap(64, 64))
-                {
-                    using (Graphics g = Graphics.FromImage(bmp))
-                    {
-                        Color[] colors = { Color.Red, Color.Orange, Color.Yellow, Color.Green, Color.Cyan, Color.Blue, Color.Purple };
-                        int colorIndex = 0;
-                        for (int x = 0; x < 64; x += 16)
-                        {
-                            for (int y = 0; y < 64; y += 16)
-                            {
-                                g.FillRectangle(new SolidBrush(colors[colorIndex % 7]), x, y, 16, 16);
-                                colorIndex++;
-                            }
-                        }
-                        using (SolidBrush blackBrush = new SolidBrush(Color.Black))
-                        {
-                            g.FillRectangle(blackBrush, 9, 11, 2, 2); g.FillRectangle(blackBrush, 13, 11, 2, 2);
-                            g.FillRectangle(blackBrush, 9, 14, 6, 1); g.FillRectangle(blackBrush, 8, 13, 1, 1);
-                            g.FillRectangle(blackBrush, 15, 13, 1, 1);
-                        }
-                    }
-                    bmp.Save(Path.Combine(texturePath, "steve.png"), System.Drawing.Imaging.ImageFormat.Png);
-                    bmp.Save(Path.Combine(texturePath, "alex.png"), System.Drawing.Imaging.ImageFormat.Png);
-                }
-                lblStatus.Text = "Скины созданы!";
-            }
-            catch { lblStatus.Text = "Ошибка."; }
-        }
-
-        private void BtnOff_Click(object sender, EventArgs e)
-        {
-            lblStatus.Text = "Сброс...";
-            ProcessStartInfo psi = new ProcessStartInfo("powercfg", "/setactive 381b4222-f694-41f0-9685-ff5bb260df2e");
-            psi.WindowStyle = ProcessWindowStyle.Hidden;
-            psi.CreateNoWindow = true;
-            Process.Start(psi);
-
-            ProcessStartInfo psiNet = new ProcessStartInfo("cmd.exe", "/c netsh int tcp set global autotuninglevel=restricted");
-            psiNet.WindowStyle = ProcessWindowStyle.Hidden;
-            psiNet.CreateNoWindow = true;
-            Process.Start(psiNet);
-
-            lblStatus.Text = "Настройки сброшены.";
         }
 
         [STAThread]
